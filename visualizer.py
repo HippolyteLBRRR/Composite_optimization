@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Oct 10 15:13:23 2022
-
-@author: hlabarri
-"""
 
 import numpy as np
 import scipy as scp
