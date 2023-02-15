@@ -511,51 +511,6 @@ def FISTA_automatic_restart(x,s,Niter,epsilon,Df,proxh,F,alpha=3,C=6.38,
     return output
     
 
-    
-# def VFISTA_restart(x,s,Niter,epsilon,Df,proxh,F,mu0=None,n_init=5,exit_crit=None,out_cost=True,out_mu=False):
-#     if exit_crit is None:exit_crit = lambda x,y:npl.norm(x-y,2)
-#     if mu0 is None:mu0 = 1/s
-#     objectives = [F(x)]
-#     if out_cost:cost = [objectives[0]]
-#     mu=mu0
-#     n=n_init
-#     i=0
-#     n_restarts=0
-#     if out_cost:
-#         x,temp_cost,out=VFISTA(x,s,np.minimum(n,Niter),epsilon,Df,proxh,alpha=1-5/(3*np.sqrt(3))*np.sqrt(mu*s),F=F,exit_crit=exit_crit,restarted=True)
-#         cost = np.concatenate((cost,temp_cost))
-#         objectives = np.r_[objectives,cost[-1]]
-#     else:
-#         x,out=VFISTA(x,s,np.minimum(n,Niter),epsilon,Df,proxh,alpha=1-5/(3*np.sqrt(3))*np.sqrt(mu*s),F=None,exit_crit=exit_crit,restarted=True)
-#         objectives = np.r_[objectives,F(x)]
-#     i+=n
-#     n_restarts+=1
-#     ite_per_restart=[n]
-#     mu_estimates=[mu]
-#     while i<Niter and out==False:
-#         if out_cost:
-#             x,temp_cost,out=VFISTA(x,s,np.minimum(n,Niter-i),epsilon,Df,proxh,alpha=1-5/(3*np.sqrt(3))*np.sqrt(mu*s),F=F,exit_crit=exit_crit,restarted=True)
-#             cost = np.concatenate((cost,temp_cost))
-#             objectives = np.r_[objectives,cost[-1]]
-#         else:
-#             x,out=VFISTA(x,s,np.minimum(n,Niter-i),epsilon,Df,proxh,alpha=1-5/(3*np.sqrt(3))*np.sqrt(mu*s),F=None,exit_crit=exit_crit,restarted=True)
-#             objectives = np.r_[objectives,F(x)]
-#         i+=n
-#         n_restarts+=1
-#         ite_per_restart=np.r_[ite_per_restart,n]
-#         mu_estimates=np.r_[mu_estimates,mu]
-#         temp=4*(1-2/(3*np.sqrt(3))*np.sqrt(mu*s))**ite_per_restart[-2]
-#         test = objectives[-2]-objectives[-1]<=temp/(3-temp)*(objectives[-3]-objectives[-2])
-#         if test:
-#             n=2*n
-#         else:
-#             mu=mu/2
-#     output = (x,)
-#     if out_cost:output = output+(cost,)
-#     if out_mu:output = output + (mu_estimates,)
-#     if len(output) == 1:output = x
-#     return output
-
 
 def FISTA_Hessian(x,s,Niter,epsilon,Df,proxh,alpha=3,beta=None,F=None,
                   exit_crit=None,extra_function=None,track_ctime=False):
