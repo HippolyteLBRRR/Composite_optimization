@@ -646,11 +646,13 @@ def FISTA_BT(x,L0,rho,delta,Niter,epsilon,f,Df,proxh,h=None,exit_crit=None,
         x : array_like
             Initial vector.
         L0 : float
-            Lower estimation of the Lipschitz constant L of the gradient of f.
+            Estimation of the Lipschitz constant L of the gradient of f.
         rho : float
-            Armijo parameter, should be in (0,1).
+            Armijo parameter, should be in (0,1). We recommand to choose rho
+            in [0.8,0.9].
         delta : float
-            Increasing parameter, should be in (0,1].
+            Increasing parameter, should be in (0,1]. We recommand to chose
+            delta in [0.95,1].
         Niter : integer
             Maximum number of iterations.
         epsilon: float
@@ -665,8 +667,8 @@ def FISTA_BT(x,L0,rho,delta,Niter,epsilon,f,Df,proxh,h=None,exit_crit=None,
             Non differentiable part of the function F to minimize. If it is
             given by the user, the function computes F at each iterates.
         exit_crit : operator, optional
-            Exit criteria, function of x_k, y_k and tau the current step size.
-            The default is the norm of (x_k - y_k)/tau.
+            Exit criteria, function of x_k and y_k the current step size.
+            The default is the norm of (x_k - y_k).
         sp : operator, optional
             Scalar product of reference.
         out_L : boolean, optional
@@ -674,7 +676,7 @@ def FISTA_BT(x,L0,rho,delta,Niter,epsilon,f,Df,proxh,h=None,exit_crit=None,
             estimations of L. The default value is False.
         out_ite : boolean, optional
             If it is True, the function returns the array of backtracking
-            iterations per global iteration. The default value is False.
+            iterations per FISTA iteration. The default value is False.
         restarted : boolean, optional
             If it is True, the function returns the boolean "out" which
             specifies if the exit condition was satisfied, the value of f at
@@ -785,11 +787,9 @@ def FISTA_BT(x,L0,rho,delta,Niter,epsilon,f,Df,proxh,h=None,exit_crit=None,
     if len(output)==1:output=x
     return output
 
-def FISTA_BT_automatic_restart(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,
-                               C=None,exit_crit=None,sp=None,out_cost=True,
-                               out_L=False,out_condition=False,out_ite=False,
-                               estimated_ratio=1,exit_norm=False,
-                               extra_function=None,track_ctime=False):
+def Free_FISTA(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,C=None,exit_crit=None,
+               sp=None,out_L=False,out_condition=False,out_ite=False,
+               estimated_ratio=1,exit_norm=False):
     """Automatic FISTA restart with backtracking applied to a composite
     function F=f+h where f is differentiable and the proximal operator of h
     can be computed.
@@ -799,11 +799,13 @@ def FISTA_BT_automatic_restart(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,
         x : array_like
             Initial vector.
         L0 : float
-            Lower estimation of the Lipschitz constant L of the gradient of f.
+            Estimation of the Lipschitz constant L of the gradient of f.
         rho : float
-            Armijo parameter, should be in (0,1).
+            Armijo parameter, should be in (0,1). We recommand to choose rho
+            in [0.8,0.9].
         delta : float
-            Increasing parameter, should be in (0,1].
+            Increasing parameter, should be in (0,1]. We recommand to chose
+            delta in [0.95,1].
         Niter : integer
             Maximum number of iterations.
         epsilon: float
@@ -825,9 +827,6 @@ def FISTA_BT_automatic_restart(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,
             The default is the norm of (x_k - y_k).
         sp : operator, optional
             Scalar product of reference.
-        out_cost : boolean, optional
-            Parameter which states if the function returns the evolution of
-            F(x_k). The default value is True.
         out_L : boolean, optional
             If it is True, the function returns the array of the successive
             estimations of L. The default value is False.
@@ -843,129 +842,74 @@ def FISTA_BT_automatic_restart(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,
             is to save computations. The default value is False.
         estimated_ratio : flat, optional
             Low estimation of the condition number. The default value is 1.
-        extra_function : operator, optional
-            Additional function to compute at each iterate.
-        track_ctime : boolean, optional
-            Parameter which states if the function returns an array containing
-            the computation time at each iteration. The default value is False.
             
     Returns
     -------
         x : array_like
             Last iterate given by the method.
-        cost : array_like, optional
+        cost : array_like
             Array containing the value of F at each iterate. It is returned if
             out_cost is True.
-        ctime : array_like, optional
-            Array containing the computation time required at each iterate. 
-            The last coefficient is the total computation time. It is returned
-            if track_ctime is True.
-        extra_cost : array_like, optional
-            Array containing the value of extra_function at each iterate if a 
-            function is given.
         tab_L : array_like, optional
             Value of the estimates of L at each iterates. It is returned if
-            out_L is True.
+            restarted is True or out_L is True.
         condition_estimates : array_like, optional
             Array containing the estimations of the condition number. It is
             returned if out_condition is True.
-        tab_ite : array_like, optional
+        tab_j : array_like, optional
             Array containing the number of backtracking iterations per global
             iteration. It is returned if out_ite is True.
        """
-    if sp is None:sp = lambda x,y:np.dot(x,y)
+    if sp is None:sp=lambda x,y:np.dot(x,y)
     if exit_crit is None:
-        exit_crit = lambda x,y:np.sqrt(sp(x-y,x-y))
-        exit_norm = True
-    if C is None:C = 6.38/np.sqrt(rho)
-    objective = None
-    if out_cost: objective = h
-    if out_L:tab_L = [L0]
-    if out_ite:tab_ite = [0]
-    if out_condition:condition_estimates = []
-    if extra_function is not None: extra_cost = [extra_function(x)]
-    if track_ctime:t0 = time.perf_counter()
-    i = 0
-    n = int(2*C*np.sqrt(estimated_ratio))
-    F_tab = [f(x)+h(x)]
-    n_tab = [n]
-    if track_ctime:ctime = [time.perf_counter()-t0]
-    if out_cost: cost = [F_tab[0]]
-    outputs = FISTA_BT(x,L0,rho,delta,n,epsilon,f,Df,proxh,objective,exit_crit,
-                       sp,out_L,out_ite,restarted=True,exit_norm=exit_norm,
-                       extra_function=extra_function,track_ctime=track_ctime)
-    x = outputs[0]
-    j = 1
-    if out_cost:
-        cost_temp = outputs[j]
-        cost = np.concatenate((cost,cost_temp))
-        j += 1
-    if track_ctime:
-        ctime_temp = outputs[j]
-        ctime = np.concatenate((ctime,ctime_temp[1:]+ctime[-1]))
-        j += 1
-    if extra_function is not None:
-        extra_cost_temp = outputs[j]
-        extra_cost = np.concatenate((extra_cost,extra_cost_temp[1:]))
-        j+=1
-    tab_L_temp = outputs[j]
-    j += 1
-    if out_L: tab_L = np.concatenate((tab_L,tab_L_temp))
-    if out_ite:
-        tab_ite_temp = outputs[j]
-        tab_ite = np.concatenate((tab_ite,tab_ite_temp))
-    fx,out = outputs[-2:]
-    if track_ctime:t_temp = time.perf_counter()
-    L_tilde = tab_L_temp[-1]
-    i += n
-    F_tab = np.concatenate((F_tab,[fx+h(x)]))
-    n_tab += [n]
+        exit_crit=lambda x,y:np.sqrt(sp(x-y,x-y))
+        exit_norm=True
+    if C is None:C=6.38/np.sqrt(rho)
+    if out_L:tab_L=[L0]
+    if out_ite:tab_ite=[0]
+    if out_condition:condition_estimates=[]
+    t0 = time.perf_counter()
+    i=0
+    n=int(2*C*np.sqrt(estimated_ratio))
+    F_tab=[f(x)+h(x)]
+    n_tab=[n]
+    cout=[F_tab[0]]
+    ctime = [time.perf_counter()-t0]
+    temp=FISTA_BT(x,L0,rho,delta,n,epsilon,f,Df,proxh,h,exit_crit,sp,out_L,out_ite,restarted=True,exit_norm=exit_norm)
+    t_temp = time.perf_counter()
+    x,cout_temp,ctime_temp,out,fx,tab_L_temp=temp[:6]
+    cout=np.concatenate((cout,cout_temp))
+    ctime = np.concatenate((ctime,np.array(ctime_temp[1:])+ctime[-1]))
+        
+    
+    if out_L:tab_L=np.concatenate((tab_L,tab_L_temp))
+    if out_ite:tab_ite=np.concatenate((tab_ite,temp[-1]))
+    L_tilde=tab_L_temp[-1]
+    i+=n
+    F_tab=np.concatenate((F_tab,[fx+h(x)]))
+    n_tab+=[n]
     while (i<Niter) and out==False:
-        if track_ctime:ctime[-1] += time.perf_counter()-t_temp
-        outputs = FISTA_BT(x,L_tilde,rho,delta,np.minimum(n,Niter-i),epsilon,
-                           f,Df,proxh,objective,exit_crit,sp,out_L,out_ite,
-                           restarted=True,exit_norm=exit_norm,
-                           extra_function=extra_function,
-                           track_ctime=track_ctime)
-        x = outputs[0]
-        j = 1
-        if out_cost:
-            cost_temp = outputs[j]
-            cost = np.concatenate((cost,cost_temp))
-            j += 1
-        if track_ctime:
-            ctime_temp = outputs[j]
-            ctime = np.concatenate((ctime,ctime_temp[1:]+ctime[-1]))
-            j += 1
-        if extra_function is not None:
-            extra_cost_temp = outputs[j]
-            extra_cost = np.concatenate((extra_cost,extra_cost_temp[1:]))
-            j+=1
-        tab_L_temp = outputs[j]
-        j += 1
-        if out_L: tab_L = np.concatenate((tab_L,tab_L_temp))
-        if out_ite:
-            tab_ite_temp = outputs[j]
-            tab_ite = np.concatenate((tab_ite,tab_ite_temp))
-        fx,out = outputs[-2:]
-        if track_ctime:t_temp = time.perf_counter()
+        ctime[-1]+=time.perf_counter()-t_temp
+        temp=FISTA_BT(x,L_tilde,rho,delta,np.minimum(n,Niter-i),epsilon,f,Df,proxh,h,exit_crit,sp,out_L,out_ite,restarted=True,exit_norm=exit_norm)
+        t_temp = time.perf_counter()
+        x,cout_temp,ctime_temp,out,fx,tab_L_temp=temp[:6]
+        cout=np.concatenate((cout,cout_temp))
+        ctime = np.concatenate((ctime,np.array(ctime_temp[1:])+ctime[-1]))
+        
+        if out_L:tab_L=np.concatenate((tab_L,tab_L_temp))
+        if out_ite:tab_ite=np.concatenate((tab_ite,temp[-1]))
         L_tilde=tab_L_temp[-1]#(len(tab_L)+1)**2/(np.sum(1/np.sqrt(tab_L)))**2
         i+=np.minimum(n,Niter-i)
         F_tab=np.concatenate((F_tab,[fx+h(x)]))
-        tab_q=4/(rho*(np.array(n_tab)[:-1]+1)**2)*((F_tab[:-2]-F_tab[-1])/
-                                                   (F_tab[1:-1]-F_tab[-1]))
+        tab_q=4/(rho*(np.array(n_tab)[:-1]+1)**2)*(F_tab[:-2]-F_tab[-1])/(F_tab[1:-1]-F_tab[-1])
         q=np.min(tab_q)
         if (n<=C/np.sqrt(q)):
             n=2*n
         n_tab+=[n]
-        if out_condition:
-            condition_estimates = np.concatenate((condition_estimates,[q]))
-    output = (x,)
-    if out_cost:output += (np.array(cost),)
-    if track_ctime: output += (np.array(ctime),)
-    if extra_function is not None:output += (np.array(extra_cost))
-    if out_L:output += (np.array(tab_L),)
-    if out_condition:output += (np.array(condition_estimates),)
-    if out_ite:output += (np.array(tab_ite),)
+        if out_condition:condition_estimates=np.concatenate((condition_estimates,[q]))
+    output=(x,cout,ctime)
+    if out_L:output=output+(np.array(tab_L),)
+    if out_condition:output=output+(np.array(condition_estimates),)
+    if out_ite:output=output+(np.array(tab_ite),)
     if len(output)==1:output=x
     return output
