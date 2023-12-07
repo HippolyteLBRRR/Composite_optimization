@@ -103,7 +103,7 @@ def ForwardBackward(x,s,Niter,epsilon,Df,proxh,F=None,exit_crit=None,
     output = (x,)
     if F is not None:output+=(np.array(cost),)
     if track_ctime:output+=(np.array(ctime),)
-    if extra_function is not None:output+=(np.array(extra_cost))
+    if extra_function is not None:output+=(np.array(extra_cost),)
     if len(output) == 1:output = x
     return output
 
