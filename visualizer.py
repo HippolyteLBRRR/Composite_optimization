@@ -70,7 +70,6 @@ def Plot(tab,ite=True,costmin=None,plage=None,fontsize=None,style=None,
     tab_leg=[]
     ite_max=0
     for i in range(n):
-        tab_leg+=[tab[i].legend]
         if style==None:
             st='-'
         else:
@@ -83,7 +82,7 @@ def Plot(tab,ite=True,costmin=None,plage=None,fontsize=None,style=None,
             plt.plot(np.log10(tab[i].cost[ite_start:
                                           np.minimum(ite_end,
                                                      len(tab[i].cost))]
-                              -cost_min),linestyle=st,color=col)
+                              -cost_min),linestyle=st,color=col,label=tab[i].legend)
             n_ite=len(tab[i].cost[ite_start:
                                   np.minimum(ite_end,len(tab[i].cost))])
             if n_ite>ite_max:ite_max=n_ite
@@ -91,14 +90,13 @@ def Plot(tab,ite=True,costmin=None,plage=None,fontsize=None,style=None,
                 x_index = tab[i].extra_points[tab[i].extra_points<len(tab[i].cost)]
                 plt.scatter(x_index,np.log10(tab[i].cost[x_index]-cost_min),c=col)
         else:
-            plt.plot(tab[i].xaxis,np.log10(tab[i].cost-cost_min),linestyle=st,color=col)
+            plt.plot(tab[i].xaxis,np.log10(tab[i].cost-cost_min),linestyle=st,color=col,label=tab[i].legend)
             if tab[i].extra_points is not None:
                 x_index = tab[i].extra_points[tab[i].extra_points<len(tab[i].cost)]
                 plt.scatter(tab[i].xaxis[x_index],np.log10(tab[i].cost[x_index]-cost_min),c=col)
             if tab[i].xaxis[0]<xmin and plage is None:xmin=tab[i].xaxis[0]
             if tab[i].xaxis[-1]>xmax and plage is None:xmax=tab[i].xaxis[-1]
-    plt.legend(tab_leg,fontsize=fontsize)
-    
+    plt.legend(fontsize=fontsize)
     if ite:plt.xlim([0,ite_max])
     if ite==False:plt.xlim([xmin,xmax])
     pass
