@@ -377,7 +377,7 @@ def FISTA_fixed_restart(x,s,n_r,Niter,epsilon,Df,proxh,alpha=3,F=None,
 def FISTA_automatic_restart(x,s,Niter,epsilon,Df,proxh,F,alpha=3,C=6.38,
                             exit_crit=None,out_cost=True,estimated_ratio=1,
                             out_mu=False, extra_function=None,
-                            track_ctime=False):
+                            track_ctime=False, track_restart=False):
     """Automatic restart of FISTA (method introduced in "FISTA restart using
     an automatic estimation of the growth parameter").
     
@@ -419,6 +419,9 @@ def FISTA_automatic_restart(x,s,Niter,epsilon,Df,proxh,F,alpha=3,C=6.38,
         track_ctime : boolean, optional
             Parameter which states if the function returns an array containing
             the computation time at each iteration. The default value is False.
+        track_restart : boolean, optional
+            Parameter which states if the function returns an array containing
+            the index of the restart iterations. The default value is False.
     Returns
     -------
         
@@ -436,19 +439,23 @@ def FISTA_automatic_restart(x,s,Niter,epsilon,Df,proxh,F,alpha=3,C=6.38,
             function is given.
         growth_estimates : array_like, optional
             Array containing the estimations of the growth parameter mu. It is
-            returned if out_mu is True."""
+            returned if out_mu is True.
+        restart_index : array_like, optional
+            Array containing the index of the restart iterations. It is
+            returned if track_restart is True."""
     if exit_crit is None:exit_crit = lambda x,y:npl.norm(x-y,2)
     objective = None
     if out_cost:objective = F
     if out_mu:growth_estimates = np.array([])
     if extra_function is not None: extra_cost = np.array([extra_function(x)])
-    if track_ctime:t0 = time.perf_counter()
+    if track_restart: restart_index = np.array([0])
+    if track_ctime: t0 = time.perf_counter()
     i = 0
     n = int(2*C*np.sqrt(estimated_ratio))
-    F_tab = [F(x)]
+    obj_estimate = [F(x)]
     n_tab = [n]
     if track_ctime:ctime = [time.perf_counter()-t0]
-    if out_cost: cost = [F_tab[0]]
+    if out_cost: cost = [obj_estimate[0]]
     outputs = FISTA(x,s,n,epsilon,Df,proxh,alpha,objective,exit_crit,
                     restarted=True,extra_function=extra_function,
                     track_ctime=track_ctime)
@@ -469,9 +476,11 @@ def FISTA_automatic_restart(x,s,Niter,epsilon,Df,proxh,F,alpha=3,C=6.38,
     out = outputs[j]
     if track_ctime:t_temp = time.perf_counter()
     i += n
-    F_tab = np.concatenate((F_tab,[F(x)]))
+    obj_estimate = np.concatenate((obj_estimate,[F(x)]))
     n_tab += [n]
     while (i < Niter) and out==False:
+        if track_restart: restart_index = np.concatenate((restart_index,[i]))
+        i += np.minimum(n,Niter-i)
         if track_ctime:ctime[-1] += time.perf_counter()-t_temp
         outputs = FISTA(x,s,np.minimum(n,Niter-i),epsilon,Df,proxh,alpha,
                         objective,exit_crit,restarted=True,
@@ -491,12 +500,11 @@ def FISTA_automatic_restart(x,s,Niter,epsilon,Df,proxh,F,alpha=3,C=6.38,
             extra_cost = np.concatenate((extra_cost,extra_cost_temp[1:]))
             j+=1
         out = outputs[j]
-        
         if track_ctime:t_temp = time.perf_counter()
-        i += np.minimum(n,Niter-i)
-        F_tab = np.concatenate((F_tab,[F(x)]))
-        tab_mu = (4/(s*(np.array(n_tab)[:-1]+1)**2)*(F_tab[:-2]-F_tab[-1])/
-                  (F_tab[1:-1]-F_tab[-1]))
+        obj_estimate = np.concatenate((obj_estimate,[F(x)]))
+        tab_mu = ((4/(s*(np.array(n_tab)[:-1]+1)**2)*
+                   (obj_estimate[:-2]-obj_estimate[-1])/
+                   (obj_estimate[1:-1]-obj_estimate[-1])))
         mu = np.min(tab_mu)
         if out_mu:growth_estimates = np.r_[growth_estimates,mu]
         if (n <= C/np.sqrt(s*mu)):
@@ -507,6 +515,7 @@ def FISTA_automatic_restart(x,s,Niter,epsilon,Df,proxh,F,alpha=3,C=6.38,
     if track_ctime:output += (ctime,)
     if extra_function is not None:output += (extra_cost,)
     if out_mu:output += (growth_estimates,)
+    if track_restart:output += (np.array(restart_index),)
     if len(output) == 1:output = x
     return output
     
@@ -790,7 +799,7 @@ def FISTA_BT(x,L0,rho,delta,Niter,epsilon,f,Df,proxh,h=None,exit_crit=None,
 def Free_FISTA(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,C=None,exit_crit=None,
                sp=None,out_cost=True,out_L=False,out_condition=False,
                out_ite=False,estimated_ratio=1,exit_norm=False,
-               extra_function=None,track_ctime=False):
+               extra_function=None,track_ctime=False,track_restart=False):
     """Automatic FISTA restart with backtracking applied to a composite
     function F=f+h where f is differentiable and the proximal operator of h
     can be computed.
@@ -851,6 +860,9 @@ def Free_FISTA(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,C=None,exit_crit=None,
         track_ctime : boolean, optional
             Parameter which states if the function returns an array containing
             the computation time at each iteration. The default value is False.
+        track_restart : boolean, optional
+            Parameter which states if the function returns an array containing
+            the index of the restart iterations. The default value is False.
             
     Returns
     -------
@@ -875,7 +887,9 @@ def Free_FISTA(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,C=None,exit_crit=None,
         tab_ite : array_like, optional
             Array containing the number of backtracking iterations per global
             iteration. It is returned if out_ite is True.
-       """
+        restart_index : array_like, optional
+            Array containing the index of the restart iterations. It is
+            returned if track_restart is True."""
     if sp is None:sp = lambda x,y:np.dot(x,y)
     if exit_crit is None:
         exit_crit = lambda x,y:np.sqrt(sp(x-y,x-y))
@@ -887,13 +901,14 @@ def Free_FISTA(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,C=None,exit_crit=None,
     if out_ite:tab_ite = [0]
     if out_condition:condition_estimates = []
     if extra_function is not None: extra_cost = [extra_function(x)]
+    if track_restart: restart_index = np.array([0])
     if track_ctime:t0 = time.perf_counter()
     i = 0
     n = int(2*C*np.sqrt(estimated_ratio))
-    F_tab = [f(x)+h(x)]
+    obj_estimate = [f(x)+h(x)]
     n_tab = [n]
     if track_ctime:ctime = [time.perf_counter()-t0]
-    if out_cost: cost = [F_tab[0]]
+    if out_cost: cost = [obj_estimate[0]]
     outputs = FISTA_BT(x,L0,rho,delta,n,epsilon,f,Df,proxh,objective,exit_crit,
                        sp,out_L,out_ite,restarted=True,exit_norm=exit_norm,
                        extra_function=extra_function,track_ctime=track_ctime)
@@ -921,9 +936,10 @@ def Free_FISTA(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,C=None,exit_crit=None,
     if track_ctime:t_temp = time.perf_counter()
     L_tilde = tab_L_temp[-1]
     i += n
-    F_tab = np.concatenate((F_tab,[fx+h(x)]))
+    obj_estimate = np.concatenate((obj_estimate,[fx+h(x)]))
     n_tab += [n]
     while (i<Niter) and out==False:
+        if track_restart: restart_index = np.concatenate((restart_index,[i]))
         if track_ctime:ctime[-1] += time.perf_counter()-t_temp
         outputs = FISTA_BT(x,L_tilde,rho,delta,np.minimum(n,Niter-i),epsilon,
                            f,Df,proxh,objective,exit_crit,sp,out_L,out_ite,
@@ -954,9 +970,10 @@ def Free_FISTA(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,C=None,exit_crit=None,
         if track_ctime:t_temp = time.perf_counter()
         L_tilde=tab_L_temp[-1]#(len(tab_L)+1)**2/(np.sum(1/np.sqrt(tab_L)))**2
         i+=np.minimum(n,Niter-i)
-        F_tab=np.concatenate((F_tab,[fx+h(x)]))
-        tab_q=4/(rho*(np.array(n_tab)[:-1]+1)**2)*((F_tab[:-2]-F_tab[-1])/
-                                                   (F_tab[1:-1]-F_tab[-1]))
+        obj_estimate=np.concatenate((obj_estimate,[fx+h(x)]))
+        tab_q=(4/(rho*(np.array(n_tab)[:-1]+1)**2)*
+               ((obj_estimate[:-2]-obj_estimate[-1])/
+                (obj_estimate[1:-1]-obj_estimate[-1])))
         q=np.min(tab_q)
         if (n<=C/np.sqrt(q)):
             n=2*n
@@ -970,5 +987,6 @@ def Free_FISTA(x,L0,rho,delta,Niter,epsilon,f,h,Df,proxh,C=None,exit_crit=None,
     if out_L:output += (np.array(tab_L),)
     if out_condition:output += (np.array(condition_estimates),)
     if out_ite:output += (np.array(tab_ite),)
+    if track_restart:output += (np.array(restart_index),)
     if len(output)==1:output=x
     return output
